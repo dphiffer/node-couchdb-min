@@ -26,7 +26,8 @@
 var sys = require("sys"),
     http = require('http'),
     sys = require('sys'),
-    querystring = require('querystring');
+    querystring = require('querystring'),
+    Buffer = require('buffer').Buffer;
 
 // ----------------------------------------------------------------------------
 // Convenience default server instance (localhost:5984, lazy)
@@ -213,12 +214,18 @@ mixin(exports.Db.prototype, {
       for (var k in opt.query) if (k !== 'stale') opt.query[k] = JSON.stringify(opt.query[k]);
       opt.path += '?' + querystring.stringify(opt.query);
     }
+    
+    if (!opt.encoding)
+      opt.encoding = 'utf8';
+    
     // Setup body
     if (opt.body && (opt.method === 'PUT' || opt.method === 'POST')) {
-      if (typeof opt.body !== 'string')
+      if (typeof opt.body !== 'string' && opt.encoding === 'utf8')
         opt.body = exports.jsonEncode(opt.body);
-      opt.headers['Content-Length'] = opt.body.length;
-      opt.headers['Content-Type'] = 'application/json';
+      if (!opt.headers['Content-Length'])
+        opt.headers['Content-Length'] = Buffer.byteLength(opt.body, opt.encoding);
+      if (!opt.headers['Content-Type'])
+        opt.headers['Content-Type'] = 'application/json';
     } else if (opt.body) {
       delete opt.body;
     }
@@ -239,7 +246,7 @@ mixin(exports.Db.prototype, {
           (opt.body ? '\n\n  '+opt.body : ''));
       }
       if (opt.body) {
-        req.write(opt.body, 'utf-8');
+        req.write(opt.body, opt.encoding);
       }
       req.addListener('response', function (_res) {
         res = _res;
@@ -419,7 +426,6 @@ HTTPConnectionPool.prototype.destroy = function(conn){
 
 // ----------------------------------------------------------------------------
 // Base64 encoding
-var Buffer = require('buffer').Buffer;
 const B64CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
 function base64_encode (str) {
   var data, datalen, o1, o2, o3, h1, h2, h3, h4, bits, i = 0, ac = 0, enc="",
